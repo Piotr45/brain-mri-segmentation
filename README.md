@@ -18,8 +18,8 @@ TODO
 
 ## Authors
 
-* **Piotr Baryczkowski** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
+* **Piotr Baryczkowski** - *Initial work* - [Piotr45](https://github.com/Piotr45)
+* **Paweł Strzelczyk** - *Initial work* - [pawelstrzelczyk](https://github.com/pawelstrzelczyk)
 
 ## License
 
