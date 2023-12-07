@@ -12,6 +12,8 @@ import numpy as np
 
 from PIL import Image
 
+from utils import display
+
 
 DATASET_PATH = os.path.join(
     os.path.relpath(os.path.join(os.path.dirname(__file__), os.pardir)), "dataset"
@@ -66,14 +68,12 @@ class DatasetLoaderGen:
             for mask_source in mask_source_files:
                 # yield original image and mask
                 # TODO find prettier way to do this
-                yield np.array(Image.open(mask_source.replace("_mask", ""))), np.array(
-                    Image.open(mask_source)
-                )
+                image = np.array(Image.open(mask_source.replace("_mask", "")))
+                mask = np.array(Image.open(mask_source))
+                yield image, np.expand_dims(mask, axis=2)
 
 
 if __name__ == "__main__":
-    dataset_loader = DatasetLoaderGen()
+    dataset_loader = DatasetLoaderGen(download=False)
     image, mask = next(dataset_loader())
-    cv2.imshow("original image", image)
-    cv2.imshow("mask", mask)
-    cv2.waitKey(0)
+    display(image, mask)
