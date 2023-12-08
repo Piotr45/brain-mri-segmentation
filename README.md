@@ -9,16 +9,30 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 
 All prerequisities are listed in `requirements.txt`.
+You should also install [Graphviz](https://graphviz.gitlab.io/download/).
 
 ### Installing
 
 A step by step series of examples that tell you how to get a development env running.
 
-TODO
+Create and install venv with all packages listed in `requirements.txt`.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Train model with `train.py` script or look at `brain.ipynb`.
+
+```bash
+cd brain
+python train.py
+```
 
 ## Authors
 
-* **Piotr Baryczkowski** - *Initial work* - [Piotr45](https://github.com/Piotr45)
+* **Piotr Baryczkowski** - *Initial work, UNet implementation* - [Piotr45](https://github.com/Piotr45)
 * **Paweł Strzelczyk** - *Initial work* - [pawelstrzelczyk](https://github.com/pawelstrzelczyk)
 
 ## License
