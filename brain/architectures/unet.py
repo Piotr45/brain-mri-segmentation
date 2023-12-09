@@ -71,6 +71,8 @@ class UNetArchitecture(Architecture):
     def train_model(
         self,
         train_batches: tf.data.Dataset,
+        valid_batches: tf.data.Dataset,
+        validation_steps: int,
         steps_per_epoch: int,
         batch_size: int,
         epochs: int,
@@ -81,6 +83,8 @@ class UNetArchitecture(Architecture):
             steps_per_epoch=steps_per_epoch,
             batch_size=batch_size,
             epochs=epochs,
+            validation_steps=validation_steps,
+            validation_data=valid_batches,
         )
         return
 
@@ -94,6 +98,17 @@ class UNetArchitecture(Architecture):
             Model statistics.
         """
         return self.model.evaluate(test)
+
+    def predict_model(self, data: tf.Tensor) -> tf.Tensor:
+        """Function for predicting the model.
+
+        Args:
+            data: A data to predict.
+
+        Returns:
+            Model predictions.
+        """
+        return self.model.predict(data)
 
     def save_model(self) -> None:
         return super().save_model()

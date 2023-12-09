@@ -12,7 +12,7 @@ import numpy as np
 
 from PIL import Image
 
-from utils import display
+from utils import display, normalize
 
 
 DATASET_PATH = os.path.join(
@@ -51,7 +51,7 @@ class DatasetLoaderGen:
             )
 
     def __call__(self) -> tuple[np.ndarray, np.ndarray]:
-        """Walsk through dataset dirs and returns data.
+        """Walks through dataset dirs and returns data.
 
         Returns:
             Tuple of images, original image and mask.
@@ -70,7 +70,16 @@ class DatasetLoaderGen:
                 # TODO find prettier way to do this
                 image = np.array(Image.open(mask_source.replace("_mask", "")))
                 mask = np.array(Image.open(mask_source))
-                yield image, np.expand_dims(mask, axis=2)
+                resized_image = cv2.resize(
+                    image, (128, 128), interpolation=cv2.INTER_AREA
+                )
+                resized_mask = cv2.resize(
+                    mask, (128, 128), interpolation=cv2.INTER_AREA
+                )
+                normalized_image, normalized_mask = normalize(
+                    resized_image, resized_mask
+                )
+                yield normalized_image, np.expand_dims(normalized_mask, axis=2)
 
 
 if __name__ == "__main__":

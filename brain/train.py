@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from dataloader import DatasetLoaderGen
 from architectures.unet import UNetArchitecture
-from utils import Augment
+from utils import Augment, display_prediction
 
 DATASET_LENGTH = (
     3929  # it is a rough value from kaggle, TODO obtain this information from code.
@@ -26,15 +26,16 @@ def prepare_dataset(batch_size: int = 32) -> tuple[tf.data.Dataset, tf.data.Data
     dataset = tf.data.Dataset.from_generator(
         dataset_loader,
         output_signature=(
-            tf.TensorSpec(shape=(256, 256, 3), dtype=tf.uint8),
-            tf.TensorSpec(shape=(256, 256, 1), dtype=tf.uint8),
+            tf.TensorSpec(shape=(128, 128, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(128, 128, 1), dtype=tf.float32),
         ),
     )
-    test_ds_size = int(DATASET_LENGTH * 0.3)
+    test_ds_size = int(DATASET_LENGTH * 0.15)
     train_ds_size = DATASET_LENGTH - test_ds_size
 
     test_ds = dataset.take(test_ds_size)
-    train_ds = dataset.skip(test_ds_size)
+    valid_ds = dataset.skip(test_ds_size).take(test_ds_size)
+    train_ds = dataset.skip(test_ds_size * 2)
 
     train_batches = (
         train_ds.cache()
@@ -46,21 +47,37 @@ def prepare_dataset(batch_size: int = 32) -> tuple[tf.data.Dataset, tf.data.Data
     )
 
     test_batches = test_ds.batch(batch_size)
+    valid_batches = valid_ds.batch(batch_size)
 
-    return train_batches, test_batches
+    return train_batches, valid_batches, test_batches
 
 
 def main() -> None:
-    batch_size = 32
+    batch_size = 16
     steps_per_epoch = (DATASET_LENGTH - int(DATASET_LENGTH * 0.3)) // batch_size
-    train, test = prepare_dataset()
+    train, valid, test = prepare_dataset()
 
-    unet = UNetArchitecture()
+    unet = UNetArchitecture(input_size=(128, 128, 3), n_classes=1)
     unet.build_model()
     unet.plot_model()
 
-    unet.train_model(train, steps_per_epoch, batch_size, 10)
+    print(train.element_spec)
+    print(valid.element_spec)
+
+    unet.train_model(
+        train,
+        valid,
+        int(DATASET_LENGTH * 0.15) // batch_size,
+        steps_per_epoch,
+        batch_size,
+        10,
+    )
     model_stats = unet.evaluate_model(test)
+    # for images, masks in test.take(1):
+    #     prediction = unet.model.predict_on_batch(images)
+    #     for i in range(batch_size):
+    #         print(images[i].shape, masks[i].shape)
+    #         display_prediction(images[i].numpy(), masks[i].numpy(), prediction[i])
     print(model_stats, type(model_stats))
     return
 
