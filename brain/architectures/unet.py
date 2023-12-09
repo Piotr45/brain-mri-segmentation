@@ -63,8 +63,8 @@ class UNetArchitecture(Architecture):
         self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
         self.model.compile(
             optimizer=tf.keras.optimizers.Adam(),
-            loss="sparse_categorical_crossentropy",
-            metrics=["accuracy"],
+            loss=tf.keras.losses.BinaryCrossentropy(),
+            metrics=[tf.keras.metrics.Precision()],
         )
         return self.model
 
