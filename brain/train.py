@@ -8,77 +8,119 @@ that specialize in brain tumor segmentation.
 """
 
 import argparse
+import sys
 
 import tensorflow as tf
 
 from dataloader import DatasetLoaderGen
 from architectures.unet import UNetArchitecture
-from utils import Augment, display_prediction
-
-DATASET_LENGTH = (
-    3929  # it is a rough value from kaggle, TODO obtain this information from code.
-)
+from utils.dataset import prepare_dataset
+from utils.io import display_prediction
 
 
-def prepare_dataset(batch_size: int = 32) -> tuple[tf.data.Dataset, tf.data.Dataset]:
-    dataset_loader = DatasetLoaderGen(download=False)
-
-    dataset = tf.data.Dataset.from_generator(
-        dataset_loader,
-        output_signature=(
-            tf.TensorSpec(shape=(128, 128, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(128, 128, 1), dtype=tf.float32),
-        ),
-    )
-    test_ds_size = int(DATASET_LENGTH * 0.15)
-    train_ds_size = DATASET_LENGTH - test_ds_size
-
-    test_ds = dataset.take(test_ds_size)
-    valid_ds = dataset.skip(test_ds_size).take(test_ds_size)
-    train_ds = dataset.skip(test_ds_size * 2)
-
-    train_batches = (
-        train_ds.cache()
-        .shuffle(train_ds_size)
-        .batch(batch_size)
-        .repeat()
-        .map(Augment())
-        .prefetch(buffer_size=tf.data.AUTOTUNE)
+def parse_arguments(argv: list[str]) -> argparse.Namespace:
+    """The code will parse arguments from std input."""
+    arg_parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    test_batches = test_ds.batch(batch_size)
-    valid_batches = valid_ds.batch(batch_size)
+    arg_parser.add_argument(
+        "--dataset-dir",
+        type=str,
+        action="store",
+        required=False,
+        default="./dataset",
+        help="Directory with our dataset.",
+    )
 
-    return train_batches, valid_batches, test_batches
+    arg_parser.add_argument(
+        "--epochs",
+        type=int,
+        action="store",
+        required=False,
+        default=10,
+        help="Number of epochs for our trainig session.",
+    )
+
+    arg_parser.add_argument(
+        "--batch-size",
+        type=int,
+        action="store",
+        required=False,
+        default=16,
+        help="The batch size that will be applied to dataset.",
+    )
+
+    arg_parser.add_argument(
+        "--split",
+        nargs="+",
+        type=float,
+        required=False,
+        default=(0.7, 0.15, 0.15),
+        help="Information about how to split dataset into train, valid and test.",
+    )
+
+    arg_parser.add_argument(
+        "--resize-shape",
+        nargs="+",
+        type=float,
+        required=False,
+        default=(128, 128),
+        help="Information about shape to which image data shoul be resized.",
+    )
+
+    arg_parser.add_argument(
+        "--download", action="store_true", help="Whether to download dataset or not."
+    )
+
+    return arg_parser.parse_args(argv)
 
 
 def main() -> None:
-    batch_size = 16
-    steps_per_epoch = (DATASET_LENGTH - int(DATASET_LENGTH * 0.3)) // batch_size
-    train, valid, test = prepare_dataset()
+    # parse arguments
+    args = parse_arguments(sys.argv[1:])
+    batch_size = args.batch_size
 
-    unet = UNetArchitecture(input_size=(128, 128, 3), n_classes=1)
+    assert len(args.split) == 3, "You have to pass three arguments for --split"
+    assert sum(args.split) == 1.0, "Your arguments should sum to 1"
+    assert (
+        len(args.resize_shape) == 2
+    ), "You should pass two arguments for resize shape e.g. 128 128"
+
+    # handle the data
+    dataset_loader = DatasetLoaderGen(download=args.download, resize_shape=(128, 128))
+    dataest_num_samples = dataset_loader.dataset_info["num_samples"]
+
+    steps_per_epoch = (
+        dataest_num_samples - int(dataest_num_samples * args.split[0])
+    ) // batch_size
+    train, valid, test = prepare_dataset(dataset_loader, batch_size)
+
+    # create model
+    input_size = (args.resize_shape[0], args.resize_shape[1], 3)
+    unet = UNetArchitecture(input_size=input_size, n_classes=1)
     unet.build_model()
     unet.plot_model()
 
-    print(train.element_spec)
-    print(valid.element_spec)
-
+    # train model
     unet.train_model(
-        train,
-        valid,
-        int(DATASET_LENGTH * 0.15) // batch_size,
-        steps_per_epoch,
-        batch_size,
-        10,
+        train_batches=train,
+        valid_batches=valid,
+        validation_steps=int(dataest_num_samples * args.split[1]) // batch_size,
+        steps_per_epoch=steps_per_epoch,
+        batch_size=batch_size,
+        epochs=args.epochs,
     )
+
+    # evaluation process
     model_stats = unet.evaluate_model(test)
-    # for images, masks in test.take(1):
-    #     prediction = unet.model.predict_on_batch(images)
-    #     for i in range(batch_size):
-    #         print(images[i].shape, masks[i].shape)
-    #         display_prediction(images[i].numpy(), masks[i].numpy(), prediction[i])
-    print(model_stats, type(model_stats))
+    print(model_stats)
+
+    # display results from 1 batch
+    for images, masks in test.take(1):
+        prediction = unet.model.predict_on_batch(images)
+        for i in range(batch_size):
+            display_prediction(images[i].numpy(), masks[i].numpy(), prediction[i])
     return
 
 
