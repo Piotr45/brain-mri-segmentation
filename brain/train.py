@@ -9,6 +9,7 @@ that specialize in brain tumor segmentation.
 
 import argparse
 import sys
+import os
 
 import tensorflow as tf
 
@@ -34,6 +35,15 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
 
     arg_parser.add_argument(
+        "--model-output",
+        type=str,
+        action="store",
+        required=False,
+        default="../models/test_model",
+        help="Path where to save the model.",
+    )
+
+    arg_parser.add_argument(
         "--epochs",
         type=int,
         action="store",
@@ -52,6 +62,24 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
 
     arg_parser.add_argument(
+        "--num-blocks",
+        type=int,
+        action="store",
+        required=False,
+        default=4,
+        help="The number of encoder blocks insied U-Net architecture.",
+    )
+
+    arg_parser.add_argument(
+        "--filters",
+        type=int,
+        action="store",
+        required=False,
+        default=32,
+        help="Start value of filters that will be applied for U-Net architecture. Number of filters is doubled in each encoder block.",
+    )
+
+    arg_parser.add_argument(
         "--split",
         nargs="+",
         type=float,
@@ -66,7 +94,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
         type=float,
         required=False,
         default=(128, 128),
-        help="Information about shape to which image data shoul be resized.",
+        help="Information about shape to which image data should be resized.",
     )
 
     arg_parser.add_argument(
@@ -87,6 +115,9 @@ def main() -> None:
         len(args.resize_shape) == 2
     ), "You should pass two arguments for resize shape e.g. 128 128"
 
+    if not os.path.exists(args.model_output):
+        os.makedirs(args.model_output)
+
     # handle the data
     dataset_loader = DatasetLoaderGen(download=args.download, resize_shape=(128, 128))
     dataest_num_samples = dataset_loader.dataset_info["num_samples"]
@@ -99,8 +130,8 @@ def main() -> None:
     # create model
     input_size = (args.resize_shape[0], args.resize_shape[1], 3)
     unet = UNetArchitecture(input_size=input_size, n_classes=1)
-    unet.build_model()
-    unet.plot_model()
+    unet.build_model(args.num_blocks, args.filters)
+    unet.plot_model(filename="model_architecture", path=args.model_output)
 
     # train model
     unet.train_model(
@@ -113,8 +144,14 @@ def main() -> None:
     )
 
     # evaluation process
-    model_stats = unet.evaluate_model(test)
-    print(model_stats)
+    dice_loss, dice_coef, iou, binary_acc = unet.evaluate_model(test)
+    unet.save_model(args.model_output)
+    with open(
+        os.path.join(args.model_output, "evaluation.txt"), "w", encoding="utf-8"
+    ) as eval_file:
+        eval_file.write(
+            f"Dice loss: {dice_loss}\nDice coef: {dice_coef}\nIOU: {iou}\nBinary accuracy: {binary_acc}"
+        )
 
     # display results from 1 batch
     for images, masks in test.take(1):

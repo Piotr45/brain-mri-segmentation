@@ -78,7 +78,17 @@ class UNetArchitecture(Architecture):
         batch_size: int,
         epochs: int,
     ) -> None:
-        """Model training function."""
+        """Model training function.
+
+        Args:
+            train_batches: Training dataset as Tensorflow batch dataset.
+            valid_batches: Validation dataset as Tensorflow batch dataset.
+            validation_steps: Int that defines how many batches it wil yield per epoch for validation.
+            steps_per_epoch: Integer value that defines how many batches it wil yield per epoch for train data.
+            batch_size: Size of batch.
+            epochs: The number of epochs for our training session.
+        """
+        # train model
         self.history = self.model.fit(
             train_batches,
             steps_per_epoch=steps_per_epoch,
@@ -111,8 +121,13 @@ class UNetArchitecture(Architecture):
         """
         return self.model.predict(data)
 
-    def save_model(self) -> None:
-        return super().save_model()
+    def save_model(self, filepath: str) -> None:
+        """Function that saves our model.
+
+        Args:
+            filepath: Path where to save the model.
+        """
+        self.model.save(filepath=filepath, save_format="tf")
 
     @staticmethod
     def create_encoder_block(
