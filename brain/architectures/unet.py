@@ -6,6 +6,7 @@
 import tensorflow as tf
 
 from architectures.architecture import Architecture
+from utils.nn import dice_coef_loss, dice_coef, iou
 
 
 class UNetArchitecture(Architecture):
@@ -56,15 +57,15 @@ class UNetArchitecture(Architecture):
             kernel_initializer="he_normal",
         )(ublocks[-1])
         # Create network output layer
-        outputs = tf.keras.layers.Conv2D(
-            self.n_classes, 1, activation="softmax", padding="same"
-        )(last_conv)
+        outputs = tf.keras.layers.Conv2D(self.n_classes, 1, activation="sigmoid")(
+            last_conv
+        )
         # Save model inside architecture object
         self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
         self.model.compile(
             optimizer=tf.keras.optimizers.Adam(),
-            loss=tf.keras.losses.BinaryCrossentropy(),
-            metrics=[tf.keras.metrics.Precision()],
+            loss=dice_coef_loss,
+            metrics=[dice_coef, iou, "binary_accuracy"],
         )
         return self.model
 
@@ -131,27 +132,16 @@ class UNetArchitecture(Architecture):
         Returns:
             Single mini encoder block.
         """
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(inputs)
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(conv)
-
-        conv = tf.keras.layers.BatchNormalization()(conv, training=False)
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(inputs)
+        activation = tf.keras.layers.Activation("relu")(conv)
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(activation)
+        batch_norm = tf.keras.layers.BatchNormalization(axis=3)(conv)
+        next_layer = tf.keras.layers.Activation("relu")(batch_norm)
 
         if dropout > 0:
-            conv = tf.keras.layers.Dropout(dropout)(conv)
+            next_layer = tf.keras.layers.Dropout(dropout)(batch_norm)
         if max_pooling:
-            next_layer = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(conv)
+            next_layer = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(next_layer)
         else:
             next_layer = conv
         skip_connection = conv
@@ -173,25 +163,22 @@ class UNetArchitecture(Architecture):
         Returns:
             Single mini decoder block.
         """
-        upscale = tf.keras.layers.Conv2DTranspose(
-            n_filters, (3, 3), strides=(2, 2), padding="same"
-        )(prev_layer_input)
-        merge = tf.keras.layers.concatenate([upscale, skip_layer_input], axis=3)
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(merge)
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(conv)
-        return conv
+        upscale = tf.keras.layers.concatenate(
+            [
+                tf.keras.layers.Conv2DTranspose(
+                    n_filters, (2, 2), strides=(2, 2), padding="same"
+                )(prev_layer_input),
+                skip_layer_input,
+            ],
+            axis=3,
+        )
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(upscale)
+        activation = tf.keras.layers.Activation("relu")(conv)
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(activation)
+        batch_norm = tf.keras.layers.BatchNormalization(axis=3)(conv)
+        activation = tf.keras.layers.Activation("relu")(batch_norm)
+
+        return activation
 
     def __create_encoder_blocks(
         self, num_blocks: int, n_filters: int, inputs: tf.keras.layers.Input
