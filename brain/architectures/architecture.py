@@ -27,6 +27,9 @@ class Architecture:
     def evaluate_model(self) -> None:
         raise NotImplementedError
 
+    def predict_model(self, data: tf.Tensor) -> None:
+        raise NotImplementedError
+
     def save_model(self) -> None:
         raise NotImplementedError
 

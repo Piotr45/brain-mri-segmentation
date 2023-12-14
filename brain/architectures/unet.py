@@ -6,6 +6,7 @@
 import tensorflow as tf
 
 from architectures.architecture import Architecture
+from utils.nn import dice_coef_loss, dice_coef, iou
 
 
 class UNetArchitecture(Architecture):
@@ -56,31 +57,45 @@ class UNetArchitecture(Architecture):
             kernel_initializer="he_normal",
         )(ublocks[-1])
         # Create network output layer
-        outputs = tf.keras.layers.Conv2D(
-            self.n_classes, 1, activation="softmax", padding="same"
-        )(last_conv)
+        outputs = tf.keras.layers.Conv2D(self.n_classes, 1, activation="sigmoid")(
+            last_conv
+        )
         # Save model inside architecture object
         self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
         self.model.compile(
             optimizer=tf.keras.optimizers.Adam(),
-            loss="sparse_categorical_crossentropy",
-            metrics=["accuracy"],
+            loss=dice_coef_loss,
+            metrics=[dice_coef, iou, "binary_accuracy"],
         )
         return self.model
 
     def train_model(
         self,
         train_batches: tf.data.Dataset,
+        valid_batches: tf.data.Dataset,
+        validation_steps: int,
         steps_per_epoch: int,
         batch_size: int,
         epochs: int,
     ) -> None:
-        """Model training function."""
+        """Model training function.
+
+        Args:
+            train_batches: Training dataset as Tensorflow batch dataset.
+            valid_batches: Validation dataset as Tensorflow batch dataset.
+            validation_steps: Int that defines how many batches it wil yield per epoch for validation.
+            steps_per_epoch: Integer value that defines how many batches it wil yield per epoch for train data.
+            batch_size: Size of batch.
+            epochs: The number of epochs for our training session.
+        """
+        # train model
         self.history = self.model.fit(
             train_batches,
             steps_per_epoch=steps_per_epoch,
             batch_size=batch_size,
             epochs=epochs,
+            validation_steps=validation_steps,
+            validation_data=valid_batches,
         )
         return
 
@@ -95,8 +110,24 @@ class UNetArchitecture(Architecture):
         """
         return self.model.evaluate(test)
 
-    def save_model(self) -> None:
-        return super().save_model()
+    def predict_model(self, data: tf.Tensor) -> tf.Tensor:
+        """Function for predicting the model.
+
+        Args:
+            data: A data to predict.
+
+        Returns:
+            Model predictions.
+        """
+        return self.model.predict(data)
+
+    def save_model(self, filepath: str) -> None:
+        """Function that saves our model.
+
+        Args:
+            filepath: Path where to save the model.
+        """
+        self.model.save(filepath=filepath, save_format="tf")
 
     @staticmethod
     def create_encoder_block(
@@ -116,27 +147,16 @@ class UNetArchitecture(Architecture):
         Returns:
             Single mini encoder block.
         """
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(inputs)
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(conv)
-
-        conv = tf.keras.layers.BatchNormalization()(conv, training=False)
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(inputs)
+        activation = tf.keras.layers.Activation("relu")(conv)
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(activation)
+        batch_norm = tf.keras.layers.BatchNormalization(axis=3)(conv)
+        next_layer = tf.keras.layers.Activation("relu")(batch_norm)
 
         if dropout > 0:
-            conv = tf.keras.layers.Dropout(dropout)(conv)
+            next_layer = tf.keras.layers.Dropout(dropout)(batch_norm)
         if max_pooling:
-            next_layer = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(conv)
+            next_layer = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(next_layer)
         else:
             next_layer = conv
         skip_connection = conv
@@ -158,25 +178,22 @@ class UNetArchitecture(Architecture):
         Returns:
             Single mini decoder block.
         """
-        upscale = tf.keras.layers.Conv2DTranspose(
-            n_filters, (3, 3), strides=(2, 2), padding="same"
-        )(prev_layer_input)
-        merge = tf.keras.layers.concatenate([upscale, skip_layer_input], axis=3)
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(merge)
-        conv = tf.keras.layers.Conv2D(
-            n_filters,
-            3,
-            activation="relu",
-            padding="same",
-            kernel_initializer="HeNormal",
-        )(conv)
-        return conv
+        upscale = tf.keras.layers.concatenate(
+            [
+                tf.keras.layers.Conv2DTranspose(
+                    n_filters, (2, 2), strides=(2, 2), padding="same"
+                )(prev_layer_input),
+                skip_layer_input,
+            ],
+            axis=3,
+        )
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(upscale)
+        activation = tf.keras.layers.Activation("relu")(conv)
+        conv = tf.keras.layers.Conv2D(n_filters, (3, 3), padding="same")(activation)
+        batch_norm = tf.keras.layers.BatchNormalization(axis=3)(conv)
+        activation = tf.keras.layers.Activation("relu")(batch_norm)
+
+        return activation
 
     def __create_encoder_blocks(
         self, num_blocks: int, n_filters: int, inputs: tf.keras.layers.Input
