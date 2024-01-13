@@ -44,7 +44,7 @@ options:
   --split SPLIT [SPLIT ...]
                         Information about how to split dataset into train, valid and test. (default: (0.7, 0.15, 0.15))
   --resize-shape RESIZE_SHAPE [RESIZE_SHAPE ...]
-                        Information about shape to which image data should be resized. (default: (128, 128))
+                        Information about shape to which image data should be resized. (default: (256, 256))
   --download            Whether to download dataset or not. (default: False)
 ```
 
