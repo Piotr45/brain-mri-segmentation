@@ -12,12 +12,17 @@ def prepare_dataset(
     dataset_loader: DatasetLoaderGen,
     batch_size: int = 32,
     split: tuple = (0.70, 0.15, 0.15),
+    data_shape: tuple = (256, 256, 3),
+    label_shape: tuple = (256, 256, 1),
 ) -> tuple[tf.data.Dataset, tf.data.Dataset]:
     """Function for creating train, valid, test datasets.
 
     Args:
+        dataset_loader: A dataset loader generator object.
         batch_size: A int that indicates size of the batch size.
         split: A tuple with percentage size of dataset for train, valid, test.
+        data_shape: Shape of the image (input data for the model).
+        label_shape: Shape of the mask.
 
     Returns:
         Three dataset: train, valid, test.
@@ -27,8 +32,8 @@ def prepare_dataset(
     dataset = tf.data.Dataset.from_generator(
         dataset_loader,
         output_signature=(
-            tf.TensorSpec(shape=(128, 128, 3), dtype=tf.float32),
-            tf.TensorSpec(shape=(128, 128, 1), dtype=tf.float32),
+            tf.TensorSpec(shape=data_shape, dtype=tf.float32),
+            tf.TensorSpec(shape=label_shape, dtype=tf.float32),
         ),
     )
 
