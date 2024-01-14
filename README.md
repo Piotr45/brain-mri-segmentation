@@ -26,6 +26,29 @@ pip install -r requirements.txt
 Train model with `train.py` script or look at `brain.ipynb`.
 
 ```bash
+usage: train.py [-h] [--dataset-dir DATASET_DIR] [--model-output MODEL_OUTPUT] [--epochs EPOCHS] [--batch-size BATCH_SIZE] [--num-blocks NUM_BLOCKS] [--filters FILTERS] [--split SPLIT [SPLIT ...]]
+                [--resize-shape RESIZE_SHAPE [RESIZE_SHAPE ...]] [--download]
+
+options:
+  -h, --help            show this help message and exit
+  --dataset-dir DATASET_DIR
+                        Directory with our dataset. (default: ./dataset)
+  --model-output MODEL_OUTPUT
+                        Path where to save the model. (default: ../models/test_model)
+  --epochs EPOCHS       Number of epochs for our trainig session. (default: 10)
+  --batch-size BATCH_SIZE
+                        The batch size that will be applied to dataset. (default: 16)
+  --num-blocks NUM_BLOCKS
+                        The number of encoder blocks insied U-Net architecture. (default: 4)
+  --filters FILTERS     Start value of filters that will be applied for U-Net architecture. Number of filters is doubled in each encoder block. (default: 32)
+  --split SPLIT [SPLIT ...]
+                        Information about how to split dataset into train, valid and test. (default: (0.7, 0.15, 0.15))
+  --resize-shape RESIZE_SHAPE [RESIZE_SHAPE ...]
+                        Information about shape to which image data should be resized. (default: (256, 256))
+  --download            Whether to download dataset or not. (default: False)
+```
+
+```bash
 cd brain
 python train.py
 ```

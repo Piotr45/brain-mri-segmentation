@@ -16,7 +16,7 @@ import tensorflow as tf
 from dataloader import DatasetLoaderGen
 from architectures.unet import UNetArchitecture
 from utils.dataset import prepare_dataset
-from utils.io import display_prediction
+from utils.io import display_prediction, save_model_info, save_model_training_plots
 
 
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -91,9 +91,9 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     arg_parser.add_argument(
         "--resize-shape",
         nargs="+",
-        type=float,
+        type=int,
         required=False,
-        default=(128, 128),
+        default=(256, 256),
         help="Information about shape to which image data should be resized.",
     )
 
@@ -119,19 +119,34 @@ def main() -> None:
         os.makedirs(args.model_output)
 
     # handle the data
-    dataset_loader = DatasetLoaderGen(download=args.download, resize_shape=(128, 128))
+    dataset_loader = DatasetLoaderGen(
+        download=args.download,
+        resize_shape=(None if args.resize_shape == (256, 256) else args.resize_shape),
+    )
+    data_shape = (args.resize_shape[0], args.resize_shape[1], 3)
+    mask_shape = (args.resize_shape[0], args.resize_shape[1], 1)
     dataest_num_samples = dataset_loader.dataset_info["num_samples"]
 
     steps_per_epoch = (
         dataest_num_samples - int(dataest_num_samples * args.split[0])
     ) // batch_size
-    train, valid, test = prepare_dataset(dataset_loader, batch_size)
+    train, valid, test = prepare_dataset(
+        dataset_loader, batch_size, args.split, data_shape, mask_shape
+    )
 
     # create model
     input_size = (args.resize_shape[0], args.resize_shape[1], 3)
     unet = UNetArchitecture(input_size=input_size, n_classes=1)
     unet.build_model(args.num_blocks, args.filters)
     unet.plot_model(filename="model_architecture", path=args.model_output)
+    save_model_info(
+        os.path.join(args.model_output, "info.txt"),
+        args.batch_size,
+        args.epochs,
+        args.split,
+        args.filters,
+        args.num_blocks,
+    )
 
     # train model
     unet.train_model(
@@ -153,11 +168,13 @@ def main() -> None:
             f"Dice loss: {dice_loss}\nDice coef: {dice_coef}\nIOU: {iou}\nBinary accuracy: {binary_acc}"
         )
 
+    save_model_training_plots(args.model_output, unet.history)
+
     # display results from 1 batch
-    for images, masks in test.take(1):
-        prediction = unet.model.predict_on_batch(images)
-        for i in range(batch_size):
-            display_prediction(images[i].numpy(), masks[i].numpy(), prediction[i])
+    # for images, masks in test.take(1):
+    #     prediction = unet.model.predict_on_batch(images)
+    #     for i in range(batch_size):
+    #         display_prediction(images[i].numpy(), masks[i].numpy(), prediction[i])
     return
 
 
